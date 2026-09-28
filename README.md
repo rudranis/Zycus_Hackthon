@@ -1,102 +1,125 @@
-# Zycus_Hackthon
+data/                Runtime SQLite database (generated, not committed)
+# Zycus_Hackthon | StockPulse
 
-StockPulse is a lightweight inventory monitoring and recommendation demo. It combines a Flask API, a local SQLite database, and a browser dashboard to help a merchant spot low stock and demand changes, then review suggested price or reorder actions.
+StockPulse is an inventory monitoring demo for a small commerce catalog. The Flask backend stores products and suggestions in SQLite, detects low-stock and demand signals, and produces rule-based price and replenishment recommendations for a person to review.
 
 ## Features
 
-- Inventory dashboard with catalog counts, low-stock and high-demand metrics, and category filtering.
-- Eight sample products seeded automatically when the database is first created.
-- Sale simulation that decrements stock, increments demand velocity, and detects inventory-low or demand-spike signals.
-- Rule-based price and replenishment suggestions, including a reason and confidence score.
-- Human review controls: accepting a price suggestion updates the product price; accepting a reorder suggestion increases stock; rejecting either leaves inventory and price unchanged.
-- Product creation, manual stock updates, and manual recommendation endpoints.
-- Dashboard polling every three seconds, with no external queue or database service required.
+- Dashboard metrics for catalog size, low stock, pending suggestions, and high demand.
+- Category filtering and automatic dashboard refresh.
+- Eight sample products seeded automatically on first launch.
+- Sale simulation updates stock and cumulative demand, then checks for inventory-low and demand-spike signals.
+- Rule-based price and reorder recommendations with a reason and confidence value.
+- Accepting a price suggestion changes the product price; accepting a reorder suggestion adds the recommended stock. Rejecting leaves the product unchanged.
+- API support for creating products, setting stock, and manually requesting suggestions.
+- React/Vite dashboard source in `ui-src/` in addition to the Flask-served HTML/CSS/JavaScript dashboard in `frontend/`.
 
 ## Tech Stack
 
-- **Backend:** Python 3.9+, Flask 3.1.1, Python standard library (`sqlite3`, `concurrent.futures`)
-- **Frontend:** HTML, CSS, and vanilla JavaScript using the Fetch API
-- **Storage:** SQLite, created at `data/stockpulse.db` on startup
-- **Background work:** In-process `ThreadPoolExecutor` for recommendation generation
+- **Backend:** Python, Flask 3.1.1, `sqlite3`, `concurrent.futures`
+- **Frontend:** HTML, CSS, vanilla JavaScript; React 19 and Vite 8 for the separate `ui-src/` client
+- **Database:** SQLite at `data/stockpulse.db`
+- **Background processing:** In-process `ThreadPoolExecutor`
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    User[Merchant] -->|uses| Browser[Browser dashboard<br/>HTML, CSS, JavaScript]
-    Browser -->|HTTP / JSON| Flask[Flask application]
-    Flask -->|read/write| SQLite[(SQLite database)]
-    Flask -->|submit signal work| Workers[ThreadPoolExecutor]
-    Workers -->|calculate and save suggestions| SQLite
-    SQLite -->|products and pending suggestions| Flask
-    Flask -->|JSON responses| Browser
-    User -->|accept or reject| Browser
+    User[Merchant] --> Browser[Browser]
+    Browser -->|Flask-served dashboard :5000| Flask[Flask API]
+    Browser -->|React dev client :5173| Vite[Vite dev server]
+    Vite -->|proxied HTTP and JSON| Flask
+    Flask -->|read and write| DB[(SQLite)]
+    Flask -->|queue signal evaluation| Worker[ThreadPoolExecutor]
+    Worker -->|save rule suggestions| DB
+    DB --> Flask
+    Flask -->|JSON response| Browser
 ```
+
+The Flask app currently serves `frontend/` at `/`. Vite serves the React source separately during development. Vite's production build is written to `frontend/dist/`; the current Flask app does not serve that directory automatically.
 
 ## Working Flow
 
 ```mermaid
 flowchart TD
-    Start[Start Flask app] --> Init[Create tables and seed sample products if needed]
-    Init --> Load[Dashboard requests products and pending suggestions]
-    Load --> Monitor[Dashboard refreshes every 3 seconds]
-    Monitor --> Sale[Merchant records a simulated sale]
-    Sale --> Update[Update stock and demand velocity in SQLite]
-    Update --> Detect{Low stock or demand spike?}
-    Detect -->|Yes| Queue[Queue rule evaluation in worker pool]
+    Start[Start Flask app] --> Setup[Create tables and seed products if needed]
+    Setup --> View[Dashboard loads products and pending suggestions]
+    View --> Sale[Merchant records a simulated sale]
+    Sale --> Update[Update stock and cumulative demand in SQLite]
+    Update --> Check{Below reorder point or demand spike?}
+    Check -->|Yes| Queue[Queue rule evaluation]
     Queue --> Suggest[Save price and reorder suggestions]
-    Suggest --> Review[Dashboard displays suggestions for review]
+    Suggest --> Review[Merchant reviews suggestions]
     Review --> Decision{Accept or reject?}
-    Decision -->|Accept| Apply[Apply recommended price or stock change]
-    Decision -->|Reject| Keep[Keep current price and stock]
-    Apply --> Monitor
-    Keep --> Monitor
-    Detect -->|No| Monitor
+    Decision -->|Accept| Apply[Apply the price or stock change]
+    Decision -->|Reject| Keep[Keep current product values]
+    Apply --> View
+    Keep --> View
+    Check -->|No| View
 ```
 
 ## Recommendation Rules
 
-- A product below its reorder threshold can receive a 10% price-increase recommendation.
-- When product demand is more than twice the category average, it can receive a 5% price-increase recommendation.
-- Otherwise, a price suggestion holds the current price.
-- Suggested reorder quantity is `max(1, 3 * reorder threshold - current stock)` with a seven-day lead-time estimate.
-- Suggestions are advisory; a person must accept them before the suggested price or stock change is applied.
-
-Demand-spike detection compares a product's accumulated `demand_velocity` with the larger of 3 or three times the other products' category average. This demo tracks a cumulative counter, not a time-windowed orders-per-day metric.
+- Low stock can produce a 10% price-increase recommendation.
+- Demand greater than twice the category average can produce a 5% price-increase recommendation.
+- Otherwise, the price suggestion holds the current price.
+- Reorder quantity is `max(1, 3 * reorder threshold - current stock)` with a seven-day lead-time estimate.
+- The backend detects a demand spike when cumulative `demand_velocity` is greater than `max(3, 3 * category average)`.
+- Demand velocity is a cumulative demo counter, not a time-windowed orders-per-day calculation. Recommendations are advisory until accepted.
 
 ## Run Locally
 
-### Windows PowerShell
+Prerequisites: Python 3.9 or newer, and Node.js 20.19+ or 22.12+ for the Vite client.
+
+### 1. Install Python dependencies
+
+From the repository root:
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r backend/requirements.txt
+```
+
+On macOS/Linux, activate with `source .venv/bin/activate` instead.
+
+### 2. Start the Flask backend
+
+From the repository root, in one terminal:
+
+```powershell
 python backend/app.py
 ```
 
-### macOS or Linux
+The backend and Flask-served dashboard are available at <http://127.0.0.1:5000>. Database setup and sample seeding happen automatically.
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r backend/requirements.txt
-python backend/app.py
+### 3. Start the React/Vite client (optional)
+
+In a second terminal:
+
+```powershell
+cd ui-src
+npm ci
+npm run dev
 ```
 
-Open <http://127.0.0.1:5000>. The database and seed data are initialized automatically. To reset the demo data, stop the server and remove `data/stockpulse.db`; it will be recreated at the next startup. Do not delete the database if it contains data you want to keep.
+Open the URL printed by Vite, usually <http://127.0.0.1:5173>. API requests are proxied to the Flask server on port 5000. To create a production React bundle, run `npm run build` from `ui-src/`; output goes to `frontend/dist/`.
+
+**React integration status:** The React source currently calls `/admin/strategy`, `/products/<id>/snapshots`, and `/chat`, which are not implemented by the current Flask backend. Those React panels will not work until the matching backend routes are added. The Flask-served dashboard uses the supported API below.
+
+To reset demo data, stop Flask and remove `data/stockpulse.db`. It will be recreated on the next launch. Keep the file if you need to preserve local data.
 
 ## HTTP API
 
-All endpoints are served by the Flask app on port 5000. JSON request bodies are used where applicable.
+JSON request bodies are used where applicable.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/health` | Health check |
-| `GET` | `/products?category=ALL` | List products; optional category filter |
+| `GET` | `/products?category=ALL` | List products, optionally filtered by category or status |
 | `POST` | `/products` | Create a product |
-| `POST` | `/products/<product_id>/orders` | Record a sale and evaluate signals |
-| `PATCH` | `/products/<product_id>/stock` | Set a product's stock level |
+| `POST` | `/products/<product_id>/orders` | Record a sale and check inventory/demand signals |
+| `PATCH` | `/products/<product_id>/stock` | Set stock level |
 | `GET` | `/suggestions?status=PENDING` | List suggestions by status |
 | `PATCH` | `/suggestions/<suggestion_id>` | Accept or reject a suggestion |
 | `POST` | `/products/<product_id>/suggest-pricing` | Generate manual rule suggestions |
@@ -106,16 +129,21 @@ All endpoints are served by the Flask app on port 5000. JSON request bodies are 
 
 ```text
 backend/
-  app.py             Flask routes, SQLite setup, and recommendation rules
-  requirements.txt   Python dependencies
-data/                Runtime SQLite database (generated, not committed)
+  app.py              Flask routes, SQLite setup, and recommendation rules
+  requirements.txt    Python dependencies
+data/                 Runtime SQLite database (created automatically)
 frontend/
-  app.js             Dashboard behavior and API requests
-  index.html         Dashboard markup
-  style.css          Dashboard styling
-README.md            Project documentation
+  app.js              Flask dashboard behavior and API requests
+  index.html          Flask dashboard markup
+  style.css           Flask dashboard styling
+ui-src/
+  main.jsx            React dashboard source
+  index.html          Vite entry point
+  package.json        React/Vite scripts and dependencies
+  vite.config.js      Dev API proxy and build output configuration
+README.md             Project documentation
 ```
 
-## Scope and Limitations
+## Limitations
 
-This is a local hackathon/demo application, not a production inventory service. The worker queue is in-process and not durable, demand velocity is cumulative rather than time-windowed, and the app has no authentication or authorization. Do not expose it publicly or use its recommendations for live pricing or replenishment without adding appropriate security, operational controls, and business validation.
+This is a local hackathon demo, not a production inventory service. It has no authentication, uses an in-process non-durable worker pool, and tracks demand cumulatively. The React UI and current Flask API are not fully aligned; see the integration status above. Add security, durable background processing, business validation, and matching API routes before production use.
