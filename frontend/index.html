@@ -1,0 +1,34 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111814"><title>StockPulse | ShopStream</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark">↗</span> stock<span>pulse</span></div>
+    <div class="shop"><span class="shop-dot"></span><div><b>ShopStream</b><small>Commerce workspace</small></div></div>
+    <div class="nav-title">WORKSPACE</div>
+    <a class="nav-link active">▦ &nbsp; Overview</a>
+    <div class="sidebar-foot"><i></i> RULE ENGINE ACTIVE<small>Inventory advisor · Local SQLite</small></div>
+  </aside>
+  <main>
+    <header><span class="crumb">WORKSPACE <b>/</b> OVERVIEW</span><span class="live"><i></i> LIVE MONITORING</span></header>
+    <section class="welcome"><div><span class="eyebrow"><i></i> INVENTORY INTELLIGENCE</span><h1>Good morning, <em>ShopStream.</em></h1><p>Your inventory signals are being watched. Here is what needs attention.</p></div><span class="clock-label">STOCKPULSE · LOCAL</span></section>
+    <section class="metrics">
+      <article><label>CATALOG PRODUCTS</label><strong id="product-count">—</strong><small>Across your catalog</small></article>
+      <article><label>LOW STOCK</label><strong id="low-count">—</strong><small>Below reorder threshold</small></article>
+      <article><label>PENDING SUGGESTIONS</label><strong id="suggestion-count">—</strong><small>Awaiting your review</small></article>
+      <article><label>HIGH DEMAND</label><strong id="demand-count">—</strong><small>More than 8 orders / 24h</small></article>
+    </section>
+    <section class="section-head"><div><span class="eyebrow"><i></i> MERCHANDISING INBOX</span><h2>Needs your review <span class="pill" id="pending-pill">0</span></h2></div><button class="quiet" id="refresh">↻ Refresh</button></section>
+    <section id="suggestions" class="suggestions"><div class="empty">Loading recommendations…</div></section>
+    <section class="section-head catalog-head"><div><span class="eyebrow"><i></i> LIVE CATALOG</span><h2>Product inventory</h2></div><select id="category-filter"><option value="ALL">All categories</option><option value="ELECTRONICS">Electronics</option><option value="APPAREL">Apparel</option><option value="HOME">Home</option></select></section>
+    <section class="table-wrap"><div class="table-head"><span>PRODUCT</span><span>PRICE</span><span>ON HAND</span><span>DEMAND / DAY</span><span>STATUS</span><span></span></div><div id="products"></div></section>
+    <div id="message" class="message" hidden></div>
+    <footer>STOCKPULSE <b>·</b> INVENTORY INTELLIGENCE <span>Recommendations are advisory. A person approves every change.</span></footer>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
